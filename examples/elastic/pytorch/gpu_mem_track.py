@@ -107,7 +107,7 @@ class MemTracker(object):
                     f.write(f'- | {str(n)} * Size:{str(s):<20} | Memory: {str(m*n)[:6]} M | {str(t):<20} | {data_type}\n')
 
                 self.last_tensor_sizes = new_tensor_sizes
-
+ 
             f.write(f"\nAt {where_str:<50}"
                     f" Total Tensor Used Memory:{self.get_tensor_usage():<7.1f}Mb"
                     f" Total Allocated Memory:{self.get_allocate_usage():<7.1f}Mb\n\n")
