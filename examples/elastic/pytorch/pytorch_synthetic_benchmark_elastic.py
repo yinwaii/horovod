@@ -7,6 +7,9 @@ from torchvision import models
 import horovod.torch as hvd
 import timeit
 import numpy as np
+from gpu_mem_track import MemTracker
+
+gpu_tracker = MemTracker()
 
 # Benchmark settings
 parser = argparse.ArgumentParser(description='PyTorch Synthetic Benchmark',
@@ -37,7 +40,11 @@ parser.add_argument('--use-adasum', action='store_true', default=False,
 args = parser.parse_args()
 args.cuda = not args.no_cuda and torch.cuda.is_available()
 
+gpu_tracker.track() 
+
 hvd.init()
+
+gpu_tracker.track() 
 
 if args.cuda:
     # Horovod: pin GPU to local rank.
@@ -48,6 +55,7 @@ cudnn.benchmark = True
 # Set up standard model.
 model = getattr(models, args.model)()
 
+gpu_tracker.track() 
 
 # By default, Adasum doesn't need scaling up learning rate.
 def lr_scaler():
@@ -73,12 +81,15 @@ optimizer = hvd.DistributedOptimizer(optimizer,
                                      compression=compression,
                                      op=hvd.Adasum if args.use_adasum else hvd.Average)
 
+gpu_tracker.track() 
+
 # Set up fixed fake data
 data = torch.randn(args.batch_size, 3, 224, 224)
 target = torch.LongTensor(args.batch_size).random_() % 1000
 if args.cuda:
     data, target = data.cuda(), target.cuda()
 
+gpu_tracker.track() 
 
 def benchmark_step(state):
     optimizer.zero_grad()
@@ -118,6 +129,7 @@ def run_benchmark(state):
     if state.iter == 0:
         log('Running benchmark...')
     for x in range(state.iter, args.num_iters):
+        gpu_tracker.track() 
         time = timeit.timeit(lambda: benchmark_step(state), number=args.num_batches_per_iter)
         img_sec = args.batch_size * args.num_batches_per_iter / time
         log('Iter #%d: %.1f img/sec per %s' % (x, img_sec, device))
@@ -132,8 +144,10 @@ def on_state_reset():
         param_group['lr'] = lr * lr_scaler()
 
 
+gpu_tracker.track() 
 state = hvd.elastic.TorchState(model, optimizer, img_secs=[], iter=0, batch=0, warm=False)
 state.register_reset_callbacks([on_state_reset])
+gpu_tracker.track() 
 run_benchmark(state)
 
 # Results
